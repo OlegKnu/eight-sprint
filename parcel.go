@@ -63,6 +63,9 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 		}
 		parcels = append(parcels, p)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
 	return parcels, nil
 }
 
@@ -77,32 +80,40 @@ func (s ParcelStore) SetStatus(number int, status string) error {
 
 // SetAddress — изменение адреса доставки (только если статус = registered)
 func (s ParcelStore) SetAddress(number int, address string) error {
-	p, err := s.Get(number)
+	res, err := s.db.Exec(
+		`UPDATE parcel SET address = ? WHERE number = ? AND status = ?`,
+		address, number, ParcelStatusRegistered,
+	)
 	if err != nil {
 		return err
 	}
-	if p.Status != ParcelStatusRegistered {
-		return errors.New("address can be changed only for registered parcels")
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
 	}
-	_, err = s.db.Exec(
-		`UPDATE parcel SET address = ? WHERE number = ?`,
-		address, number,
-	)
-	return err
+	if rows == 0 {
+		return errors.New("посылка не найдена")
+	}
+	return nil
 }
 
 // Delete — удаление посылки (только если статус = registered)
 func (s ParcelStore) Delete(number int) error {
-	p, err := s.Get(number)
+	res, err := s.db.Exec(
+		`DELETE FROM parcel WHERE number = ? AND status = ?`,
+		number, ParcelStatusRegistered,
+	)
 	if err != nil {
 		return err
 	}
-	if p.Status != ParcelStatusRegistered {
-		return errors.New("only registered parcels can be deleted")
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
 	}
-	_, err = s.db.Exec(
-		`DELETE FROM parcel WHERE number = ?`,
-		number,
-	)
-	return err
+	if rows == 0 {
+		return errors.New("посылка не найдена")
+	}
+	return nil
 }
